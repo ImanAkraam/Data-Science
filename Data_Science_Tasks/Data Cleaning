@@ -1,1 +1,253 @@
+install.packages("psych")
+library(psych)
 
+data("starwars")
+View(starwars)
+
+#Variable Types 
+glimpse(starwars)
+class(starwars$gender)
+unique(starwars$gender)
+class(starwars$mass)
+
+#changing the data type of a variable
+starwars$gender<- as.factor(starwars$gender)
+class(starwars$gender)
+#checking Levels 
+levels(starwars$gender)
+# Arranging Levels 
+starwars$gender <- factor((starwars$gender),
+                         levels = c( "masculine", "feminine" ))
+levels(starwars$gender)
+
+# Select Variables 
+names(starwars)
+starwars %>% 
+  select(name, height, ends_with("color")) %>% 
+  names()
+
+#Filter Observations 
+unique(starwars$hair_color)
+starwars %>% 
+  select(name, height, ends_with("color")) %>% 
+  filter(hair_color %in% c("blond", "brown")&
+           height < 180) 
+
+#Missing Data 
+mean(starwars$height , na.rm = TRUE)
+
+starwars %>% 
+  select(name,gender,  height, hair_color, )
+
+# It removes all Not Available values
+
+starwars %>% 
+  select(name,gender,  height, hair_color, ) %>% 
+  na.omit()
+
+#It shows all NA values with (!complete.cases(.))
+starwars %>% 
+  select(name,gender,  height, hair_color ) %>% 
+ filter(!complete.cases(.))
+
+# It shows all NA values but Drop those values in
+#Which height is not available 
+
+starwars %>% 
+  select(name,gender,  height, hair_color ) %>% 
+  filter(!complete.cases(.)) %>% 
+  drop_na(height)
+
+ # It Drop those values in Which height is not available and view 
+ # all column values 
+
+starwars %>% 
+  select(name,gender,  height, hair_color ) %>% 
+  drop_na(height)%>% 
+  View()
+
+# It filters all The Not available values and then 
+#create column (mutate)  hair_color_2 and replace na 
+#values with (none)using original hair_color column 
+
+starwars %>% 
+  select(name,gender,  height, hair_color ) %>% 
+  filter(!complete.cases(.)) %>% 
+  mutate(hair_color_2=replace_na(hair_color, "none "))
+
+#Duplicates 
+
+#In starwars duplicates values are not present.so we use 
+Names <- c("Peter", "John", "Andrew", "Peter")
+Age <- c(22, 33, 44, 22)
+
+friends <- data.frame(Names, Age)
+friends # it is used to view data (friends)
+
+friends[!duplicated(friends),]
+
+friends %>% distinct() %>% 
+  View()
+
+#Recoding Variables 
+starwars %>% select(name, gender)
+starwars %>%
+  select(name, gender)%>% 
+  mutate(gender=recode(gender,
+    "masculine"=1,
+    "feminine"=2))
+
+starwars_clean <- starwars %>%
+  select_if(~ !is.list(.))
+
+sapply(starwars, is.list)
+
+
+
+cat("\nDescriptive Statistics (Mean, Median, Mode, etc.):\n")
+describe(starwars_clean)
+
+
+
+# Define mode function
+mode_func <- function(x) {
+  uniqx <- unique(x)
+  uniqx[which.max(tabulate(match(x, uniqx)))]
+}
+
+# Example: numeric column 'height'
+mode_func(starwars$height)
+
+# Example: loop through numeric columns in starwars
+starwars_clean <- starwars %>% select_if(is.numeric)
+
+for (col in names(starwars_clean)) {
+  cat("\nColumn:", col, "\n")
+  cat("Mean:", mean(starwars_clean[[col]], na.rm = TRUE), "\n")
+  cat("Median:", median(starwars_clean[[col]], na.rm = TRUE), "\n")
+  cat("Mode:", mode_func(starwars_clean[[col]]), "\n")
+}
+
+
+str(starwars)
+
+
+
+# Numeric columns
+starwars %>%
+  select(where(is.numeric)) %>%
+  names()
+
+# Categorical columns
+starwars %>%
+  select(where(~ is.character(.) | is.factor(.))) %>%
+  names()
+#Using sapply
+numeric_cols <- names(starwars)[sapply(starwars, is.numeric)]
+numeric_cols
+
+categorical_cols <- names(starwars)[sapply(starwars, function(x) is.character(x) | is.factor(x))]
+categorical_cols
+ 
+ #univariate looks at one variable at a time
+#Numeric   Mean, Median, Mode, Min, Max, Range, SD, Variance, Histogram, Boxplot
+#Categorical   Frequency tables, Mode, Bar charts, Pie charts
+
+# Example numeric variable: height
+height <- starwars$height
+
+# Mean, Median, Mode, SD, Range
+mean(height, na.rm = TRUE)
+median(height, na.rm = TRUE)
+
+# Mode function
+mode_func <- function(x) {
+  uniqx <- unique(x)
+  uniqx[which.max(tabulate(match(x, uniqx)))]
+}
+mode_func(height)
+
+sd(height, na.rm = TRUE)
+range(height, na.rm = TRUE)
+
+# Histogram
+hist(height, main="Distribution of Height", xlab="Height", col="skyblue", border="black")
+
+
+# Select numeric columns only
+starwars_num <- starwars %>% select_if(is.numeric)
+
+# Create box plots
+starwars_num %>%
+  pivot_longer(cols = everything(), names_to = "Variable", values_to = "Value") %>%
+  ggplot(aes(x = Variable, y = Value, fill = Variable)) +
+  geom_boxplot() +
+  theme_minimal() +
+  labs(title = "Boxplots for Numeric Columns in Star Wars")
+
+#Bivariate 
+colors()
+
+ggplot(starwars, aes(x = height, y = mass)) +
+  geom_point(color = "blue", size = 3) +
+  geom_smooth(method = "lm", se = FALSE, color = "red") +
+  theme_minimal() +
+  labs(title = "Height vs Mass", x = "Height (cm)", y = "Mass (kg)")
+
+ggplot(starwars, aes(x = height, y = birth_year)) +
+  geom_point(color = "green", size = 3) +
+  geom_smooth(method = "lm", se = FALSE, color = "darkgreen") +
+  theme_minimal() +
+  labs(title = "Height vs Birth Year", x = "Height (cm)", y = "Birth Year")
+
+
+
+
+starwars_clean <- starwars %>%
+  select(height, mass, birth_year) %>%
+  drop_na()   # remove NA rows
+
+ggplot(starwars_clean, aes(x = mass, y = birth_year)) +
+  geom_point(color = "purple", size = 3) +
+  geom_smooth(method = "lm", se = FALSE, color = "darkviolet") +  # fixed color
+  theme_minimal() +
+  labs(title = "Mass vs Birth Year", x = "Mass (kg)", y = "Birth Year")
+
+         # Correlation heatmap
+
+# Select numeric columns only
+starwars_num <- starwars %>%
+  select_if(is.numeric) %>%   # height, mass, birth_year
+  drop_na()  
+
+
+cor_matrix <- cor(starwars_num)
+corrplot(cor_matrix, 
+         method = "color",        # colorful squares
+         addCoef.col = "black",   # show correlation coefficients
+         title = "Correlation Heatmap", 
+         mar = c(0, 0, 2, 0))    # margins to fit the title
+
+        # Scatter plot
+ggplot(starwars_clean, aes(x = height, y = mass)) +
+  geom_point(color = "steelblue", size = 3) +
+  theme_minimal() +
+  labs(title = "Height vs Mass in Star Wars Characters",
+       x = "Height (cm)",
+       y = "Mass (kg)")
+           
+        #Multivariate Analysis
+
+
+# Keep numeric + gender
+starwars_clean <- starwars %>%
+  select(height, mass, birth_year, gender) %>%
+  drop_na()  # remove rows with any NA
+
+# Multivariate plot with gender (categorical) and birth_year (numeric)
+ggplot(starwars_clean, aes(x = height, y = mass, color = gender, size = birth_year)) +
+  geom_point(alpha = 0.7) +
+  theme_minimal() +
+  labs(title = "Height vs Mass colored by Gender and sized by Birth Year",
+       x = "Height (cm)", y = "Mass (kg)",
+       color = "Gender", size = "Birth Year")
