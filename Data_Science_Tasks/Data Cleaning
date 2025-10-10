@@ -188,25 +188,25 @@ starwars_num %>%
 #Bivariate 
 colors()
 
+#Height vs Mass
 ggplot(starwars, aes(x = height, y = mass)) +
   geom_point(color = "blue", size = 3) +
   geom_smooth(method = "lm", se = FALSE, color = "red") +
   theme_minimal() +
   labs(title = "Height vs Mass", x = "Height (cm)", y = "Mass (kg)")
 
+#Height vs Birth Year
 ggplot(starwars, aes(x = height, y = birth_year)) +
   geom_point(color = "green", size = 3) +
   geom_smooth(method = "lm", se = FALSE, color = "darkgreen") +
   theme_minimal() +
   labs(title = "Height vs Birth Year", x = "Height (cm)", y = "Birth Year")
 
-
-
-
 starwars_clean <- starwars %>%
   select(height, mass, birth_year) %>%
   drop_na()   # remove NA rows
 
+#mass vs birth year
 ggplot(starwars_clean, aes(x = mass, y = birth_year)) +
   geom_point(color = "purple", size = 3) +
   geom_smooth(method = "lm", se = FALSE, color = "darkviolet") +  # fixed color
