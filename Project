@@ -1,1 +1,225 @@
+# Tourism & Economic Growth (IDS Project)
+  
+# PHASE 1: DATA IMPORTING, CLEANING & TRANSFORMATION
+
+# Data Importing (20%)
+install.packages(c("WDI","dplyr","countrycode"))
+
+library(WDI)
+library(dplyr)
+library(countrycode)
+
+tourism <- WDI(
+  indicator = "ST.INT.ARVL",
+  start = 1995,
+  end = 2022
+) %>%
+  rename(tourism_arrivals = ST.INT.ARVL)
+
+#Import GDP & GDP Growth (World Bank)
+
+gdp <- WDI(
+  indicator = c("NY.GDP.MKTP.CD", "NY.GDP.MKTP.KD.ZG"),
+  start = 1995,
+  end = 2022
+) %>%
+  rename(
+    gdp = NY.GDP.MKTP.CD,
+    gdp_growth = NY.GDP.MKTP.KD.ZG
+  )
+
+dim(tourism)
+head(tourism)
+summary(tourism)
+
+# Merge Datasets
+panel <- merge(tourism, gdp, by = c("iso3c", "year"))
+
+#Cleaning
+panel_clean <- panel %>%
+  filter(!is.na(tourism_arrivals), !is.na(gdp), !is.na(gdp_growth)) %>%
+  filter(!is.na(countrycode(iso3c, origin="iso3c", destination="country.name"))) %>%
+  arrange(iso3c, year)
+
+# Data Transformatio
+
+panel_clean <- panel_clean %>%
+  group_by(iso3c) %>%
+  mutate(
+    tourism_to_gdp = (tourism_arrivals / gdp) * 100
+  ) %>%
+  ungroup()
+# Final Dataset Structure
+
+panel_clean <- panel_clean %>%
+  select(
+    iso3c,
+    country = country.x,
+    year,
+    tourism_arrivals,
+    gdp,
+    gdp_growth,
+    tourism_to_gdp
+  )
+
+
+#write.csv(panel_clean, "panel_clean.csv", row.names = FALSE)
+
+
+library(ggplot2)
+library(corrplot)
+
+summary(panel_clean)
+
+# Distribution Analysis (Histograms)
+  
+ggplot(panel_clean, aes(x = tourism_arrivals)) +
+  geom_histogram(bins = 50, fill = "steelblue", color = "black") +
+  theme_minimal() +
+  ggtitle("Distribution of Tourism Arrivals")
+
+
+ # Outlier Detection (Boxplots)
+  
+ggplot(panel_clean, aes(y = tourism_to_gdp)) +
+  geom_boxplot(fill = "orange") +
+  theme_minimal() +
+  ggtitle("Tourism to GDP Ratio")
+  
+# Relationship Analysis (Scatter Plot)
+  
+ggplot(panel_clean, aes(x = tourism_to_gdp, y = gdp_growth)) +
+  geom_point(alpha = 0.5) +
+  geom_smooth(method = "lm", se = TRUE, color = "red") +
+  theme_minimal() +
+  ggtitle("GDP Growth vs Tourism Intensity")
+
+# Time Series Trends
+
+top_countries <- panel_clean %>%
+  group_by(country) %>%
+  summarise(total_tourism = sum(tourism_arrivals, na.rm = TRUE)) %>%
+  arrange(desc(total_tourism)) %>%
+  slice(1:5) %>%
+  pull(country)
+
+ggplot(panel_clean %>% filter(country %in% top_countries),
+       aes(x = year, y = tourism_arrivals, color = country)) +
+  geom_line() +
+  theme_minimal() +
+  ggtitle("Tourism Trends – Top 5 Countries")
+  
+ # Correlation Analysis
+  
+numeric_data <- panel_clean %>%
+  select(tourism_arrivals, gdp, gdp_growth, tourism_to_gdp)
+
+corrplot(cor(numeric_data, use = "complete.obs"), method = "color")
+
+#(Phase 2 Output: Clear visual and statistical insights to guide Phase 3 modeling).
+
+# PHASE 3: PREDICTIVE MODELING WITH ML
+install.packages("caret", dependencies = TRUE)
+
+library(dplyr)
+library(caret)
+library(randomForest)
+library(ggplot2)
+
+
+#  LOAD CLEAN DATA
+
+panel_clean <- read.csv("panel_clean.csv")
+
+ml_data <- panel_clean %>%
+  select(gdp_growth, tourism_to_gdp, tourism_arrivals, gdp) %>%
+  na.omit()
+
+
+# SET SEED 
+
+set.seed(123)
+
+# TRAIN / TEST SPLIT
+
+train_index <- createDataPartition(ml_data$gdp_growth,
+                                   p = 0.7,
+                                   list = FALSE)
+
+train_data <- ml_data[train_index, ]
+test_data  <- ml_data[-train_index, ]
+
+
+#  BASELINE ML MODEL (LINEAR REGRESSION)
+# -------------------------
+ml_lm <- lm(gdp_growth ~ tourism_to_gdp + log(gdp), data = train_data)
+summary(ml_lm)
+
+# Predictions
+pred_lm <- predict(ml_lm, newdata = test_data)
+
+# Performance
+rmse_lm <- RMSE(pred_lm, test_data$gdp_growth)
+rmse_lm
+
+#  RANDOM FOREST MODEL
+
+rf_model <- randomForest(
+  gdp_growth ~ tourism_to_gdp + tourism_arrivals + gdp,
+  data = train_data,
+  ntree = 500,
+  importance = TRUE
+)
+
+# Predictions
+pred_rf <- predict(rf_model, newdata = test_data)
+
+# Performance
+rmse_rf <- RMSE(pred_rf, test_data$gdp_growth)
+rmse_rf
+
+# Variable importance
+importance(rf_model)
+varImpPlot(rf_model)
+
+
+set.seed(123)  # seed required for CV folds
+
+control <- trainControl(method = "cv", number = 5)
+
+cv_model <- train(
+  gdp_growth ~ tourism_to_gdp + tourism_arrivals + gdp,
+  data = train_data,
+  method = "rf",
+  trControl = control
+)
+
+cv_model
+
+
+#  OPTIONAL: K-MEANS CLUSTERING
+
+set.seed(123)
+
+cluster_data <- scale(ml_data[, c("tourism_to_gdp", "gdp_growth")])
+
+kmeans_model <- kmeans(cluster_data, centers = 3)
+
+ml_data$cluster <- kmeans_model$cluster
+
+# Visualize clusters
+ggplot(ml_data, aes(x = tourism_to_gdp, y = gdp_growth, color = factor(cluster))) +
+  geom_point(alpha = 0.6) +
+  theme_minimal() +
+  ggtitle("Clusters of Countries Based on Tourism & Growth")
+
+# SAVE ML RESULTS
+
+write.csv(data.frame(Model = c("Linear Regression", "Random Forest"),
+                     RMSE = c(rmse_lm, rmse_rf)),
+          "ml_model_performance.csv",
+          row.names = FALSE)
+
+
+
 
