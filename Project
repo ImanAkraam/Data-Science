@@ -41,7 +41,7 @@ panel_clean <- panel %>%
   filter(!is.na(countrycode(iso3c, origin="iso3c", destination="country.name"))) %>%
   arrange(iso3c, year)
 
-# Data Transformatio
+# Data Transformation
 
 panel_clean <- panel_clean %>%
   group_by(iso3c) %>%
@@ -119,15 +119,12 @@ corrplot(cor(numeric_data, use = "complete.obs"), method = "color")
 #(Phase 2 Output: Clear visual and statistical insights to guide Phase 3 modeling).
 
 # PHASE 3: PREDICTIVE MODELING WITH ML
-install.packages("caret", dependencies = TRUE)
 
 library(dplyr)
-library(caret)
 library(randomForest)
 library(ggplot2)
 
-
-#  LOAD CLEAN DATA
+#Load cleaned data
 
 panel_clean <- read.csv("panel_clean.csv")
 
@@ -135,35 +132,32 @@ ml_data <- panel_clean %>%
   select(gdp_growth, tourism_to_gdp, tourism_arrivals, gdp) %>%
   na.omit()
 
-
-# SET SEED 
-
+#Set seed (REQUIRED)
 set.seed(123)
 
-# TRAIN / TEST SPLIT
+#Train / Test split (Base R – VALID)
 
-train_index <- createDataPartition(ml_data$gdp_growth,
-                                   p = 0.7,
-                                   list = FALSE)
+n <- nrow(ml_data)
+train_index <- sample(seq_len(n), size = 0.7 * n)
 
 train_data <- ml_data[train_index, ]
 test_data  <- ml_data[-train_index, ]
 
+#Baseline ML Model – Linear Regression
+ml_lm <- lm(
+  gdp_growth ~ tourism_to_gdp + log(gdp),
+  data = train_data
+)
 
-#  BASELINE ML MODEL (LINEAR REGRESSION)
-# -------------------------
-ml_lm <- lm(gdp_growth ~ tourism_to_gdp + log(gdp), data = train_data)
 summary(ml_lm)
 
-# Predictions
+#Predictions & RMSE
 pred_lm <- predict(ml_lm, newdata = test_data)
 
-# Performance
-rmse_lm <- RMSE(pred_lm, test_data$gdp_growth)
+rmse_lm <- sqrt(mean((pred_lm - test_data$gdp_growth)^2))
 rmse_lm
 
-#  RANDOM FOREST MODEL
-
+#Random Forest Model (Random → seed already set)
 rf_model <- randomForest(
   gdp_growth ~ tourism_to_gdp + tourism_arrivals + gdp,
   data = train_data,
@@ -171,55 +165,66 @@ rf_model <- randomForest(
   importance = TRUE
 )
 
-# Predictions
 pred_rf <- predict(rf_model, newdata = test_data)
 
-# Performance
-rmse_rf <- RMSE(pred_rf, test_data$gdp_growth)
+rmse_rf <- sqrt(mean((pred_rf - test_data$gdp_growth)^2))
 rmse_rf
 
-# Variable importance
+
 importance(rf_model)
 varImpPlot(rf_model)
 
 
-set.seed(123)  # seed required for CV folds
-
-control <- trainControl(method = "cv", number = 5)
-
-cv_model <- train(
-  gdp_growth ~ tourism_to_gdp + tourism_arrivals + gdp,
-  data = train_data,
-  method = "rf",
-  trControl = control
-)
-
-cv_model
-
-
-#  OPTIONAL: K-MEANS CLUSTERING
-
+#K-Means Clustering (Unsupervised ML)
 set.seed(123)
 
-cluster_data <- scale(ml_data[, c("tourism_to_gdp", "gdp_growth")])
+cluster_data <- scale(
+  ml_data[, c("tourism_to_gdp", "gdp_growth")]
+)
 
-kmeans_model <- kmeans(cluster_data, centers = 3)
+kmeans_model <- kmeans(cluster_data, centers = 3, nstart = 25)
 
-ml_data$cluster <- kmeans_model$cluster
+ml_data$cluster <- factor(kmeans_model$cluster)
 
-# Visualize clusters
-ggplot(ml_data, aes(x = tourism_to_gdp, y = gdp_growth, color = factor(cluster))) +
-  geom_point(alpha = 0.6) +
+head(ml_data[, c("tourism_to_gdp", "gdp_growth", "cluster")], 10)
+
+kmeans_model$centers
+
+#Count how many observations in each cluster
+table(ml_data$cluster)
+
+#Cluster visualization
+library(ggplot2)
+
+ggplot(ml_data, aes(x = tourism_to_gdp, y = gdp_growth, color = cluster)) +
+  geom_point(alpha = 0.7, size = 2) +
   theme_minimal() +
-  ggtitle("Clusters of Countries Based on Tourism & Growth")
-
-# SAVE ML RESULTS
-
-write.csv(data.frame(Model = c("Linear Regression", "Random Forest"),
-                     RMSE = c(rmse_lm, rmse_rf)),
-          "ml_model_performance.csv",
-          row.names = FALSE)
+  ggtitle("Clusters of Countries by Tourism & GDP Growth") +
+  xlab("Tourism to GDP (%)") +
+  ylab("GDP Growth (%)")
 
 
+ml_data$cluster_label <- factor(
+  ml_data$cluster,
+  labels = c("Low Tourism–Low Growth", 
+             "Medium Tourism–Medium Growth", 
+             "High Tourism–High Growth")
+)
 
+head(ml_data[, c("tourism_to_gdp", "gdp_growth", "cluster_label")], 10)
 
+write.csv(
+  data.frame(
+    Model = c("Linear Regression", "Random Forest"),
+    RMSE  = c(rmse_lm, rmse_rf)
+  ),
+  "ml_model_performance.csv",
+  row.names = FALSE
+)
+
+#Clusters in data:
+table(ml_data$cluster_label)
+
+#Cluster centers (average values):
+  
+aggregate(cbind(tourism_to_gdp, gdp_growth) ~ cluster_label, data = ml_data, FUN = mean)
